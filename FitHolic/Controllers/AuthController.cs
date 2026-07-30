@@ -60,7 +60,7 @@ namespace FitHolic.Controllers
                 //? StringExtensions.MaskContactNo(user.PhoneNumber)
                 //: "No Phone Registered";
 
-                _sendOTP.SendOTP(user.Email, generatedOtp);
+                await _sendOTP.SendOTPAsync(user.Email, generatedOtp);
 
                 int atIndex = user.Email.IndexOf("@");
                 string maskedEmail = user.Email.Substring(0, Math.Min(2, atIndex)) + "******" + user.Email.Substring(atIndex);
