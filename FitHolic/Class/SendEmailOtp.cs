@@ -1,5 +1,6 @@
-﻿using System.Net;
-using System.Net.Mail;
+﻿using MailKit.Net.Smtp;
+using MailKit.Security;
+using MimeKit;
 
 namespace FitHolic.Class
 {
@@ -12,7 +13,7 @@ namespace FitHolic.Class
             _configuration = configuration;
         }
 
-        public void SendOTP(string targetEmail, string otpCode)
+        public async Task SendOTPAsync(string targetEmail, string otpCode)
         {
             try
             {
@@ -22,20 +23,14 @@ namespace FitHolic.Class
                 string senderName = _configuration["SmtpSettings:SenderName"] ?? "Support Team";
                 string password = _configuration["SmtpSettings:Password"] ?? "";
 
-                using (var smtpClient = new SmtpClient(smtpServer))
+                var message = new MimeMessage();
+                message.From.Add(new MailboxAddress(senderName, senderEmail));
+                message.To.Add(new MailboxAddress("", targetEmail));
+                message.Subject = "Your one-time password";
+
+                var bodyBuilder = new BodyBuilder
                 {
-                    smtpClient.Port = smtpPort;
-                    smtpClient.Credentials = new NetworkCredential(senderEmail, password); // 🎯 Dynamic na!
-                    smtpClient.EnableSsl = true;
-
-                    using (var mailMessage = new MailMessage())
-                    {
-                        mailMessage.From = new MailAddress(senderEmail, senderName); // 🎯 Dynamic Sender Name at Email
-                        mailMessage.Subject = "Your one-time password";
-                        mailMessage.To.Add(targetEmail);
-                        mailMessage.IsBodyHtml = true;
-
-                        mailMessage.Body = $@"
+                    HtmlBody = $@"
                     <div style=""font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px; line-height: 1.6;"">
                         <p style=""font-size: 16px;"">Hello,</p>
                         <p style=""font-size: 15px; margin-bottom: 25px;"">
@@ -52,20 +47,24 @@ namespace FitHolic.Class
                         <p style=""font-size: 14px; color: #555555; margin-bottom: 15px;"">
                             For security purposes, do not share this code with anyone.
                         </p>
-                        <p style=""font-size: 14px; color: #555555; margin-bottom: 35px;"">
-                            If you did not request this verification, please contact your system administrator.
-                        </p>
                         <p style=""font-size: 15px; margin-bottom: 5px;"">Thank you,</p>
                         <p style=""font-size: 15px; font-weight: 500; margin-top: 0;"">{senderName}</p>
-                    </div>";
+                    </div>"
+                };
 
-                        smtpClient.Send(mailMessage);
-                    }
+                message.Body = bodyBuilder.ToMessageBody();
+
+                using (var client = new SmtpClient())
+                {
+                    await client.ConnectAsync(smtpServer, smtpPort, SecureSocketOptions.StartTls);
+                    await client.AuthenticateAsync(senderEmail, password);
+                    await client.SendAsync(message);
+                    await client.DisconnectAsync(true);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Email dispatch failed: {ex.Message}");
+                Console.WriteLine($"[EMAIL ERROR] Failed to send email: {ex.Message}");
             }
         }
     }
