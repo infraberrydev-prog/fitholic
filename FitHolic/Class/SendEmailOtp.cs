@@ -18,7 +18,7 @@ namespace FitHolic.Class
             try
             {
                 string smtpServer = _configuration["SmtpSettings:Server"] ?? "smtp.gmail.com";
-                int smtpPort = int.Parse(_configuration["SmtpSettings:Port"] ?? "587");
+                int smtpPort = int.Parse(_configuration["SmtpSettings:Port"] ?? "465");
                 string senderEmail = _configuration["SmtpSettings:SenderEmail"] ?? "";
                 string senderName = _configuration["SmtpSettings:SenderName"] ?? "Support Team";
                 string password = _configuration["SmtpSettings:Password"] ?? "";
