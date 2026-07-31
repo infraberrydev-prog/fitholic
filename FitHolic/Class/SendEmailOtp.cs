@@ -1,6 +1,4 @@
-﻿using MailKit.Security;
-using MimeKit;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 
 namespace FitHolic.Class
@@ -20,23 +18,26 @@ namespace FitHolic.Class
         {
             try
             {
-                string apiKey = _configuration["Resend:ApiKey"] ?? "";
+                // Kukunin ang Brevo API Key mula sa Configuration / Render Env
+                string apiKey = _configuration["Brevo:ApiKey"] ?? "";
+                string senderEmail = _configuration["SmtpSettings:SenderEmail"] ?? "infraberrydev@gmail.com";
+                string senderName = _configuration["SmtpSettings:SenderName"] ?? "Support Team";
 
                 if (string.IsNullOrEmpty(apiKey))
                 {
-                    Console.WriteLine("[EMAIL ERROR] Resend API Key is missing!");
+                    Console.WriteLine("[EMAIL ERROR] Brevo API Key is missing!");
                     return;
                 }
 
                 _httpClient.DefaultRequestHeaders.Clear();
-                _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
+                _httpClient.DefaultRequestHeaders.Add("api-key", apiKey);
 
                 var payload = new
                 {
-                    from = "Support Team <onboarding@resend.dev>",
-                    to = new[] { targetEmail },
+                    sender = new { name = senderName, email = senderEmail },
+                    to = new[] { new { email = targetEmail } },
                     subject = "Your one-time password",
-                    html = $@"
+                    htmlContent = $@"
                     <div style=""font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #333333; max-width: 600px; margin: 0 auto; padding: 20px; line-height: 1.6;"">
                         <p style=""font-size: 16px;"">Hello,</p>
                         <p style=""font-size: 15px; margin-bottom: 25px;"">
@@ -59,16 +60,16 @@ namespace FitHolic.Class
                     "application/json"
                 );
 
-                var response = await _httpClient.PostAsync("https://api.resend.com/emails", jsonContent);
+                var response = await _httpClient.PostAsync("https://api.brevo.com/v3/smtp/email", jsonContent);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine("[EMAIL SUCCESS] OTP email sent successfully via Resend!");
+                    Console.WriteLine($"[EMAIL SUCCESS] OTP email sent successfully to {targetEmail} via Brevo!");
                 }
                 else
                 {
                     string errorResponse = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[EMAIL ERROR] Resend API failed: {response.StatusCode} - {errorResponse}");
+                    Console.WriteLine($"[EMAIL ERROR] Brevo API failed: {response.StatusCode} - {errorResponse}");
                 }
             }
             catch (Exception ex)
