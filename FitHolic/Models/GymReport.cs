@@ -15,7 +15,8 @@ namespace FitHolic.Models
 
         public decimal TotalAmount { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime? LastDateUpdated { get; set; }
 
         public List<GymReportRow> Rows { get; set; } = new();
     }

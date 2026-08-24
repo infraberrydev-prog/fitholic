@@ -9,6 +9,13 @@ namespace FitHolic.DTO
         public string OtpCode { get; set; } = string.Empty;
     }
 
+    public class VerifyOtpResponse
+    {
+        public string message { get; set; }
+        public string accessToken { get; set; }
+        public string refreshToken { get; set; }
+    }
+
     public class VerifyOtpValidator : AbstractValidator<VerifyOtpRequest>
     {
         private readonly FitHolicDbContext _context;

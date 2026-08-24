@@ -3,6 +3,7 @@ using System;
 using FitHolic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FitHolic.Migrations
 {
     [DbContext(typeof(FitHolicDbContext))]
-    partial class FitHolicDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260821062706_UpdateGymExpensesReportTable")]
+    partial class UpdateGymExpensesReportTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -191,9 +194,8 @@ namespace FitHolic.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Price")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric");
 
                     b.HasKey("Id");
 

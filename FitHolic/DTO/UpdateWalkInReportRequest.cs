@@ -18,6 +18,11 @@ namespace FitHolic.DTO
         string? ReferenceNumber
     );
 
+    public class UpdateWalkInReportResponse
+    {
+        public string message { get; set; } = string.Empty;
+    }
+
     public class UpdateWalkInReportRequestValidator : AbstractValidator<UpdateWalkInReportRequest>
     {
         public UpdateWalkInReportRequestValidator()

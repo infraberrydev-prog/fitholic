@@ -4,11 +4,11 @@ namespace FitHolic.DTO
 {
     public record UpdateExpensesRequest(
         string ReportName,
+        decimal CashPayment,
+        decimal? OnlinePayment, // Optional sa UI
+        decimal Expenses,
         decimal Payroll,
-        decimal? OnlinePayment, // Nananatiling Online Payment (Opsyonal sa UI)
         decimal Electricity,
-        decimal Water,
-        decimal OtherUtilities,
         decimal TotalExpenses
     );
 
@@ -21,24 +21,23 @@ namespace FitHolic.DTO
             RuleFor(x => x.ReportName)
                 .NotEmpty().WithErrorCode("EX001").WithMessage("{PropertyName} is required.");
 
-            RuleFor(x => x.Payroll)
+            RuleFor(x => x.CashPayment)
                 .GreaterThanOrEqualTo(0).WithErrorCode("EX002").WithMessage("{PropertyName} must be a valid amount.");
 
             RuleFor(x => x.OnlinePayment)
-                .GreaterThanOrEqualTo(0).WithErrorCode("EX003").WithMessage("{PropertyName} must be a valid amount.")
-                .When(x => x.OnlinePayment.HasValue);
+                .GreaterThanOrEqualTo(0).WithErrorCode("EX003").WithMessage("{PropertyName} must be a valid amount.");
 
-            RuleFor(x => x.Electricity)
+            RuleFor(x => x.Expenses)
                 .GreaterThanOrEqualTo(0).WithErrorCode("EX004").WithMessage("{PropertyName} must be a valid amount.");
 
-            RuleFor(x => x.Water)
+            RuleFor(x => x.Payroll)
                 .GreaterThanOrEqualTo(0).WithErrorCode("EX005").WithMessage("{PropertyName} must be a valid amount.");
 
-            RuleFor(x => x.OtherUtilities)
+            RuleFor(x => x.Electricity)
                 .GreaterThanOrEqualTo(0).WithErrorCode("EX006").WithMessage("{PropertyName} must be a valid amount.");
 
             RuleFor(x => x.TotalExpenses)
-                .GreaterThanOrEqualTo(0).WithErrorCode("EX007").WithMessage("{PropertyName} must be a valid amount.");
+                .GreaterThanOrEqualTo(0).WithErrorCode("EX006").WithMessage("{PropertyName} must be a valid amount.");
         }
     }
 }

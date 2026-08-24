@@ -4,15 +4,20 @@ using System.Collections.Generic;
 
 namespace FitHolic.DTO
 {
-    public record BulkCreateReportRequest(
-        List<CreateReportRequest> Reports
+    // ==========================================
+    // 1. REVISED DTOs (GROUPED BY CASH/ONLINE)
+    // ==========================================
+
+    public record GroupedBulkCreateReportRequest(
+        List<GroupedCreateReportRequest> Reports
     );
 
-    public record CreateReportRequest(
+    public record GroupedCreateReportRequest(
         string ReportName,
-        string PaymentType, // "Cash" o "Online"
+        string PaymentType,
         decimal TotalAmount,
-        List<ReportRowDto> Rows
+        List<ReportRowDto> CashRows,
+        List<ReportRowDto> OnlineRows
     );
 
     public record ReportRowDto(
@@ -31,36 +36,50 @@ namespace FitHolic.DTO
         string? ReferenceNumber
     );
 
-    public class BulkCreateReportRequestValidator : AbstractValidator<BulkCreateReportRequest>
+    // ==========================================
+    // 2. VALIDATORS
+    // ==========================================
+
+    public class GroupedBulkCreateReportRequestValidator : AbstractValidator<GroupedBulkCreateReportRequest>
     {
-        public BulkCreateReportRequestValidator()
+        public GroupedBulkCreateReportRequestValidator()
         {
             ClassLevelCascadeMode = CascadeMode.Stop;
 
             RuleFor(x => x.Reports)
                 .NotEmpty().WithErrorCode("RE000").WithMessage("Reports list cannot be empty.")
-                .ForEach(report => report.SetValidator(new CreateReportRequestValidator()));
+                .ForEach(report => report.SetValidator(new GroupedCreateReportRequestValidator()));
         }
     }
 
-    public class CreateReportRequestValidator : AbstractValidator<CreateReportRequest>
+    public class GroupedCreateReportRequestValidator : AbstractValidator<GroupedCreateReportRequest>
     {
-        public CreateReportRequestValidator()
+        public GroupedCreateReportRequestValidator()
         {
             ClassLevelCascadeMode = CascadeMode.Stop;
 
             RuleFor(x => x.ReportName)
                 .NotEmpty().WithErrorCode("RE001").WithMessage("{PropertyName} is required.");
 
-            RuleFor(x => x.Rows)
-                .NotEmpty().WithErrorCode("RE002").WithMessage("Report must contain at least one row.")
-                .ForEach(row => row.SetValidator(new CreateReportRowValidator()));
+            // Dapat may laman ang kahit isa man lang sa CashRows o OnlineRows
+            RuleFor(x => x)
+                .Must(x => (x.CashRows != null && x.CashRows.Count > 0) || (x.OnlineRows != null && x.OnlineRows.Count > 0))
+                .WithErrorCode("RE002")
+                .WithMessage("Report must contain at least one row in Cash or Online section.");
+
+            // Validate Cash Rows
+            RuleFor(x => x.CashRows)
+                .ForEach(row => row.SetValidator(new CreateReportRowValidator(isOnlineRow: false)));
+
+            // Validate Online Rows
+            RuleFor(x => x.OnlineRows)
+                .ForEach(row => row.SetValidator(new CreateReportRowValidator(isOnlineRow: true)));
         }
     }
 
     public class CreateReportRowValidator : AbstractValidator<ReportRowDto>
     {
-        public CreateReportRowValidator()
+        public CreateReportRowValidator(bool isOnlineRow = false)
         {
             ClassLevelCascadeMode = CascadeMode.Stop;
 
@@ -97,6 +116,16 @@ namespace FitHolic.DTO
 
             RuleFor(x => x.AmountToPay)
                .GreaterThanOrEqualTo(0).WithErrorCode("RE011").WithMessage("{PropertyName} must be a valid amount.");
+
+            // Validation na epektibo lang kapag Online Row ang tinitingnan
+            if (isOnlineRow)
+            {
+                RuleFor(x => x.OnlinePaymentMethod)
+                    .NotEmpty().WithErrorCode("RE012").WithMessage("{PropertyName} (e.g. GCash, Maya) is required for online payments.");
+
+                RuleFor(x => x.ReferenceNumber)
+                    .NotEmpty().WithErrorCode("RE013").WithMessage("{PropertyName} is required for online payments.");
+            }
         }
     }
 }

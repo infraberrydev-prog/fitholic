@@ -3,10 +3,10 @@
 namespace FitHolic.DTO
 {
     public record UpdateSingleReportRequest(
-        string ReportName,
-        string PaymentType,
-        decimal TotalAmount,
-        List<UpdateSingleReportRowDto> Rows
+        string ReportName
+        //string PaymentType,
+        //decimal TotalAmount,
+        //List<UpdateSingleReportRowDto> Rows
     );
 
     public record UpdateSingleReportRowDto(
@@ -26,6 +26,11 @@ namespace FitHolic.DTO
         string? ReferenceNumber
     );
 
+    public class UpdateSingleReportResponse
+    {
+        public string message { get; set; } = string.Empty;
+    }
+
     public class UpdateReportRequestValidator : AbstractValidator<UpdateSingleReportRequest>
     {
         public UpdateReportRequestValidator()
@@ -35,9 +40,9 @@ namespace FitHolic.DTO
             RuleFor(x => x.ReportName)
                 .NotEmpty().WithErrorCode("RE001").WithMessage("{PropertyName} is required.");
 
-            RuleFor(x => x.Rows)
-                .NotEmpty().WithErrorCode("RE002").WithMessage("Report must contain at least one row.")
-                .ForEach(row => row.SetValidator(new UpdateReportRowValidator()));
+            //RuleFor(x => x.Rows)
+            //    .NotEmpty().WithErrorCode("RE002").WithMessage("Report must contain at least one row.")
+            //    .ForEach(row => row.SetValidator(new UpdateReportRowValidator()));
         }
     }
 

@@ -21,6 +21,12 @@ namespace FitHolic.DTO
         string? ReferenceNumber
     );
 
+    public class BulkCreateCreateReportResponse
+    {
+        public string message { get; set; } = string.Empty;
+        public List<int> savedIds { get; set; } = new();
+    }
+
     public class BulkCreateWalkInReportRequestValidator : AbstractValidator<BulkCreateWalkInReportRequest>
     {
         public BulkCreateWalkInReportRequestValidator()

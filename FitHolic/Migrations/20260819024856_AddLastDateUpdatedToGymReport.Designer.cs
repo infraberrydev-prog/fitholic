@@ -3,6 +3,7 @@ using System;
 using FitHolic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FitHolic.Migrations
 {
     [DbContext(typeof(FitHolicDbContext))]
-    partial class FitHolicDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819024856_AddLastDateUpdatedToGymReport")]
+    partial class AddLastDateUpdatedToGymReport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -53,22 +56,16 @@ namespace FitHolic.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<decimal>("CashPayment")
-                        .HasColumnType("numeric");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<decimal>("Electricity")
                         .HasColumnType("numeric");
 
-                    b.Property<decimal>("Expenses")
+                    b.Property<decimal?>("OnlinePayment")
                         .HasColumnType("numeric");
 
-                    b.Property<DateTime?>("LastDateUpdated")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<decimal?>("OnlinePayment")
+                    b.Property<decimal>("OtherUtilities")
                         .HasColumnType("numeric");
 
                     b.Property<decimal>("Payroll")
@@ -79,6 +76,9 @@ namespace FitHolic.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("TotalExpenses")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("Water")
                         .HasColumnType("numeric");
 
                     b.HasKey("Id");
@@ -191,9 +191,8 @@ namespace FitHolic.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("Price")
-                        .IsRequired()
-                        .HasColumnType("text");
+                    b.Property<decimal>("Price")
+                        .HasColumnType("numeric");
 
                     b.HasKey("Id");
 

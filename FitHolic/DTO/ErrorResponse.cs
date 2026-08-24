@@ -11,7 +11,7 @@
             StatusCode = statusCode;
             ErrorType = errorType;
             Message = message;
-            Timestamp = DateTime.UtcNow;
+            Timestamp = DateTime.Now;
         }
     }
 }
