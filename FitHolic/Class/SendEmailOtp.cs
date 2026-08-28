@@ -18,13 +18,21 @@ namespace FitHolic.Class
         {
             try
             {
-                string smtpServer = _configuration["SmtpSettings:Server"] ?? "smtp.gmail.com";
-                int smtpPort = int.Parse(_configuration["SmtpSettings:Port"] ?? "587");
-                string senderEmail = _configuration["SmtpSettings:SenderEmail"] ?? "";
-                string senderName = _configuration["SmtpSettings:SenderName"] ?? "Support Team";
+                // Fallback default Values para sa Brevo Port 2525
+                string smtpServer = _configuration["SmtpSettings:Server"] ?? "smtp-relay.brevo.com";
+                int smtpPort = int.Parse(_configuration["SmtpSettings:Port"] ?? "2525");
+
+                // Username/Login sa Brevo (b3e450001@smtp-brevo.com)
+                string username = _configuration["SmtpSettings:Username"] ?? "";
+
+                // SMTP Master Key / Password mula sa Brevo
                 string password = _configuration["SmtpSettings:Password"] ?? "";
 
-                // 1. I-build ang MimeMessage (MailKit format)
+                // Sender Info (Dapat naka-register/verify sa Brevo Senders)
+                string senderEmail = _configuration["SmtpSettings:SenderEmail"] ?? "";
+                string senderName = _configuration["SmtpSettings:SenderName"] ?? "FitHolic Support";
+
+                // 1. Build MimeMessage
                 var message = new MimeMessage();
                 message.From.Add(new MailboxAddress(senderName, senderEmail));
                 message.To.Add(new MailboxAddress("", targetEmail));
@@ -59,25 +67,22 @@ namespace FitHolic.Class
 
                 message.Body = bodyBuilder.ToMessageBody();
 
-                // 2. Gamitin ang MailKit SmtpClient
+                // 2. MailKit SmtpClient Execution
                 using (var client = new SmtpClient())
                 {
-                    // Kumonekta gamit ang Port 587 at STARTTLS
-                    await client.ConnectAsync(smtpServer, smtpPort, SecureSocketOptions.StartTls);
+                    // SecureSocketOptions.Auto handles STARTTLS automatically for Port 2525
+                    await client.ConnectAsync(smtpServer, smtpPort, SecureSocketOptions.Auto);
 
-                    // I-authenticate ang credentials
-                    await client.AuthenticateAsync(senderEmail, password);
+                    // Gamitin ang Brevo Login (Username) at Brevo Key (Password)
+                    await client.AuthenticateAsync(username, password);
 
-                    // I-send ang email nang totoong Async
                     await client.SendAsync(message);
                     await client.DisconnectAsync(true);
                 }
             }
             catch (Exception ex)
             {
-                // ⚠️ HUWAG I-SWALLOW ANG ERROR! 
-                // I-rethrow para malaman ng Controller kung may failure o gamitin ang Console/ILogger
-                Console.WriteLine($"[SMTP ERROR]: {ex.Message}");
+                Console.WriteLine($"[BREVO SMTP ERROR]: {ex.Message}");
                 throw new Exception($"Failed to send OTP Email: {ex.Message}", ex);
             }
         }
