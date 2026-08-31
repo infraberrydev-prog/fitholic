@@ -31,14 +31,26 @@ namespace FitHolic.Controllers
 
             // Kunin ang API Version mula sa Assembly
             var apiVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+            var utcNow = DateTime.UtcNow;
+
+            // 2. I-convert sa Philippine Time Zone (UTC+8)
+            TimeZoneInfo phTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Singapore Standard Time");
+            // Note: Sa Linux/Render, pwede rin ang "Asia/Manila". Para gumana sa parehong Windows at Linux, gamitin ito:
+
+            DateTime phTime = TimeZoneInfo.ConvertTimeFromUtc(utcNow,
+                TimeZoneInfo.FindSystemTimeZoneById(
+                    OperatingSystem.IsWindows() ? "Singapore Standard Time" : "Asia/Manila"
+                )
+            );
 
             var statusResult = new
             {
                 status = isDbConnected ? "Healthy" : "Degraded",
                 version = apiVersion,
                 database = isDbConnected ? "Connected" : "Disconnected",
-                timestamp = DateTime.Now.ToString("MM-dd-yyyy hh:mm tt")
+                timestamp = phTime.ToString("MM-dd-yyyy hh:mm tt")
             };
+
 
             if (!isDbConnected)
             {
