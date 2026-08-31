@@ -15,6 +15,7 @@ namespace FitHolic.Controllers
         }
 
         [HttpGet]
+        [HttpHead]
         public async Task<IActionResult> GetStatus()
         {
             bool isDbConnected = false;
