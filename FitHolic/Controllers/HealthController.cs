@@ -37,7 +37,7 @@ namespace FitHolic.Controllers
                 status = isDbConnected ? "Healthy" : "Degraded",
                 version = apiVersion,
                 database = isDbConnected ? "Connected" : "Disconnected",
-                timestamp = DateTime.Now.ToString("MM-dd-yyyy HH:mm tt")
+                timestamp = DateTime.Now.ToString("MM-dd-yyyy hh:mm tt")
             };
 
             if (!isDbConnected)
