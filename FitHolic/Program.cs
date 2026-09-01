@@ -8,13 +8,19 @@ using Scalar.AspNetCore;
 using System.Text;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-var builder = WebApplication.CreateBuilder(args); builder.Services.AddCors(options =>
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "https://f7vh6n91-4200.asse.devtunnels.ms", // Your dev tunnel
+                "http://localhost:4200"                     // Local Angular dev server
+              )
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials(); // This is required when credentials mode is 'include'
     });
 });
 builder.Services.AddControllers();
