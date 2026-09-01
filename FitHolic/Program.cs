@@ -14,13 +14,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.WithOrigins(
-                "https://f7vh6n91-4200.asse.devtunnels.ms", // Your dev tunnel
-                "http://localhost:4200"                     // Local Angular dev server
-              )
+        policy.SetIsOriginAllowed(origin => true) // <--- This handles dynamic URLs
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials(); // This is required when credentials mode is 'include'
+              .AllowCredentials();
     });
 });
 builder.Services.AddControllers();
