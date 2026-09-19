@@ -23,6 +23,8 @@ namespace FitHolic
         public DbSet<PackageDto> Package { get; set; }
         public DbSet<ContractDurationDto> ContractDuration { get; set; }
         public DbSet<GymExpensesReport> GymExpenses { get; set; }
+        public DbSet<Logs_DeletedReports> Logs_DeletedReports { get; set; }
+        public DbSet<AuditLogs> AuditLogs { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

@@ -3,6 +3,7 @@ using System;
 using FitHolic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FitHolic.Migrations
 {
     [DbContext(typeof(FitHolicDbContext))]
-    partial class FitHolicDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260919042211_AddNewTblForSoftDeletion")]
+    partial class AddNewTblForSoftDeletion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,46 +24,6 @@ namespace FitHolic.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("FitHolic.Models.AuditLogs", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ChangedColumns")
-                        .HasColumnType("text");
-
-                    b.Property<int>("EntityId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("EntityName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ModifiedBy")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("NewValues")
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("OldValues")
-                        .HasColumnType("jsonb");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AuditLogs");
-                });
 
             modelBuilder.Entity("FitHolic.Models.ContractDurationDto", b =>
                 {
@@ -214,66 +177,6 @@ namespace FitHolic.Migrations
                     b.HasIndex("GymReportId");
 
                     b.ToTable("GymReportRows");
-                });
-
-            modelBuilder.Entity("FitHolic.Models.Logs_DeletedReports", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal>("AmountToPay")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("ContractDuration")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("CustomerName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal?>("DailyPass")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateOnly?>("DateOfEnrollment")
-                        .HasColumnType("date");
-
-                    b.Property<int>("GymReportId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("IncludePersonalTrainer")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsCustomerMember")
-                        .HasColumnType("boolean");
-
-                    b.Property<decimal>("MembershipFee")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("MonthlyPayment")
-                        .HasColumnType("numeric");
-
-                    b.Property<string>("OnlinePaymentMethod")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PaymentOption")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PersonalTrainerPackage")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ReferenceNumber")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("GymReportId");
-
-                    b.ToTable("Logs_DeletedReports");
                 });
 
             modelBuilder.Entity("FitHolic.Models.PackageDto", b =>
@@ -437,17 +340,6 @@ namespace FitHolic.Migrations
                 {
                     b.HasOne("FitHolic.Models.GymReport", "GymReport")
                         .WithMany("Rows")
-                        .HasForeignKey("GymReportId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("GymReport");
-                });
-
-            modelBuilder.Entity("FitHolic.Models.Logs_DeletedReports", b =>
-                {
-                    b.HasOne("FitHolic.Models.GymReport", "GymReport")
-                        .WithMany()
                         .HasForeignKey("GymReportId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

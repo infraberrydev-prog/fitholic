@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.IO.Compression;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace FitHolic.Controllers
 {
@@ -653,6 +655,37 @@ namespace FitHolic.Controllers
                 return NotFound(new ErrorResponse(404, "NOT_FOUND", $"The report row with ID {rowId} was not found."));
             }
 
+            var oldValues = new Dictionary<string, object?>();
+            var newValues = new Dictionary<string, object?>();
+            var changedColumns = new List<string>();
+
+            // Helper method para suriin at i-record ang pagbabago bawat field
+            void TrackChange<T>(string propertyName, T oldValue, T newValue)
+            {
+                if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
+                {
+                    oldValues[propertyName] = oldValue;
+                    newValues[propertyName] = newValue;
+                    changedColumns.Add(propertyName);
+                }
+            }
+
+            // 1. I-compare ang mga lumang values laban sa bagong request values
+            TrackChange(nameof(row.CustomerName), row.CustomerName, request.CustomerName);
+            TrackChange(nameof(row.IsCustomerMember), row.IsCustomerMember, request.IsCustomerMember);
+            TrackChange(nameof(row.DateOfEnrollment), row.DateOfEnrollment, request.DateOfEnrollment);
+            TrackChange(nameof(row.MembershipFee), row.MembershipFee, request.MembershipFee);
+            TrackChange(nameof(row.ContractDuration), row.ContractDuration, request.ContractDuration);
+            TrackChange(nameof(row.MonthlyPayment), row.MonthlyPayment, request.MonthlyPayment);
+            TrackChange(nameof(row.DailyPass), row.DailyPass, request.DailyPass);
+            TrackChange(nameof(row.IncludePersonalTrainer), row.IncludePersonalTrainer, request.IncludePersonalTrainer);
+            TrackChange(nameof(row.PersonalTrainerPackage), row.PersonalTrainerPackage, request.PersonalTrainerPackage);
+            TrackChange(nameof(row.PaymentOption), row.PaymentOption, request.PaymentOption);
+            TrackChange(nameof(row.AmountToPay), row.AmountToPay, request.AmountToPay);
+            TrackChange(nameof(row.OnlinePaymentMethod), row.OnlinePaymentMethod, request.OnlinePaymentMethod);
+            TrackChange(nameof(row.ReferenceNumber), row.ReferenceNumber, request.ReferenceNumber);
+
+            // 2. I-apply ang mga bagong values sa entity
             row.CustomerName = request.CustomerName;
             row.IsCustomerMember = request.IsCustomerMember;
             row.DateOfEnrollment = request.DateOfEnrollment;
@@ -666,6 +699,28 @@ namespace FitHolic.Controllers
             row.AmountToPay = request.AmountToPay;
             row.OnlinePaymentMethod = request.OnlinePaymentMethod;
             row.ReferenceNumber = request.ReferenceNumber;
+
+            // 3. Mag-save sa AuditLogs kung may tunay na pagbabago na nangyari
+            if (changedColumns.Count > 0)
+            {
+                string currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                       ?? User.Identity?.Name
+                                       ?? "System";
+
+                var auditLog = new AuditLogs
+                {
+                    EntityName = nameof(GymReportRow),
+                    EntityId = row.Id,
+                    Action = "UPDATE",
+                    ModifiedBy = currentUserId,
+                    Timestamp = DateTime.UtcNow,
+                    OldValues = JsonSerializer.Serialize(oldValues),
+                    NewValues = JsonSerializer.Serialize(newValues),
+                    ChangedColumns = string.Join(", ", changedColumns)
+                };
+
+                _context.AuditLogs.Add(auditLog);
+            }
 
             await _context.SaveChangesAsync();
 
@@ -688,17 +743,50 @@ namespace FitHolic.Controllers
 
             if (row == null)
             {
-                return NotFound(new { Message = $"The report with ID {rowId} not found." });
+                return NotFound(new ErrorResponse(404, "NOT_FOUND", $"The report row with ID {rowId} was not found."));
             }
 
             int parentReportId = row.GymReportId;
 
-            _context.GymReportRows.Remove(row);
-            await _context.SaveChangesAsync();
+            // Gamitin ang transaction para siguradong parehong magse-save ang log at delete
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
+            try
+            {
+                // 1. Map current row properties to Logs_DeletedReports
+                var deletedLog = new Logs_DeletedReports
+                {
+                    GymReportId = row.GymReportId,
+                    CustomerName = row.CustomerName,
+                    IsCustomerMember = row.IsCustomerMember,
+                    DateOfEnrollment = row.DateOfEnrollment,
+                    MembershipFee = row.MembershipFee,
+                    ContractDuration = row.ContractDuration ?? "N/A",
+                    MonthlyPayment = row.MonthlyPayment,
+                    IncludePersonalTrainer = row.IncludePersonalTrainer,
+                    PersonalTrainerPackage = row.PersonalTrainerPackage,
+                    PaymentOption = row.PaymentOption ?? "Pay in Full",
+                    AmountToPay = row.AmountToPay,
+                    DailyPass = row.DailyPass,
+                    OnlinePaymentMethod = row.OnlinePaymentMethod,
+                    ReferenceNumber = row.ReferenceNumber
+                };
+
+                // 2. Add to logs and remove from main table
+                _context.Logs_DeletedReports.Add(deletedLog);
+                _context.GymReportRows.Remove(row);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+
+            // 3. Post-deletion tasks
             await RecalculateReportTotal(parentReportId);
-
-            // Clear cache
             await EvictReportsCacheAsync(HttpContext.RequestAborted);
 
             return Ok(new SuccessfulResponse { message = $"Successfully deleted row {rowId}!" });
@@ -714,9 +802,10 @@ namespace FitHolic.Controllers
             var parentReport = await _context.GymReports.FindAsync(reportId);
             if (parentReport == null)
             {
-                return NotFound(new { Message = $"The master report with ID {reportId} not found." });
+                return NotFound(new ErrorResponse(404, "NOT_FOUND", $"The master report with ID {reportId} was not found."));
             }
 
+            // 1. I-instantiate ang bagong row
             var newRow = new GymReportRow
             {
                 GymReportId = reportId,
@@ -736,14 +825,37 @@ namespace FitHolic.Controllers
             };
 
             _context.GymReportRows.Add(newRow);
+
+            // kailangan munang i-save para ma-generate ang newRow.Id mula sa DB
             await _context.SaveChangesAsync();
 
+            // 2. Kuhanin ang user info at gawan ng Audit Log
+            string currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                   ?? User.Identity?.Name
+                                   ?? "System";
+
+            var auditLog = new AuditLogs
+            {
+                EntityName = nameof(GymReportRow),
+                EntityId = newRow.Id,
+                Action = "CREATE",
+                ModifiedBy = currentUserId,
+                Timestamp = DateTime.UtcNow,
+                OldValues = null,
+                NewValues = JsonSerializer.Serialize(newRow),
+                ChangedColumns = "ALL"
+            };
+
+            _context.AuditLogs.Add(auditLog);
+            await _context.SaveChangesAsync();
+
+            // 3. Post-processing
             await RecalculateReportTotal(reportId);
 
             // Clear cache
             await EvictReportsCacheAsync(HttpContext.RequestAborted);
 
-            return Ok(new AddSingleRowResponse { message = "Sucessfully added new report!", newRowId = newRow.Id });
+            return Ok(new AddSingleRowResponse { message = "Successfully added new report!", newRowId = newRow.Id });
         }
 
         private async Task RecalculateReportTotal(int reportId)
