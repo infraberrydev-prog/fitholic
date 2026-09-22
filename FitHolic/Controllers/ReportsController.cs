@@ -47,97 +47,78 @@ namespace FitHolic.Controllers
         [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
         public async Task<ActionResult<PagedReportResponse>> GetReports(
             [FromQuery] string? search,
-            [FromQuery] DateOnly? startDateCreated, // Start date para sa date range
-            [FromQuery] DateOnly? endDateCreated,   // End date para sa date range
+            [FromQuery] DateOnly? startDateCreated,
+            [FromQuery] DateOnly? endDateCreated,
             [FromQuery] decimal? minRevenue,
             [FromQuery] decimal? maxRevenue,
-            [FromQuery] string? lastUpdated,       // "all", "today", "this_week", "this_month", "never"
+            [FromQuery] string? lastUpdated = "ALL", // Short codes: TOD, L7D, L30D, TM, ALL
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 10,
-            [FromQuery] string? sortBy = "date_desc")
+            [FromQuery] string? sortBy = "dateTimeCreated", // Column name
+            [FromQuery] string? sortOrder = "DESC")   // Direction: ASC, DESC
         {
             if (page < 1) page = 1;
             if (pageSize < 1) pageSize = 10;
 
             var query = _context.GymReports.AsNoTracking();
 
-            // 1. Search Filter (by Report Name)
+            // 1. Search Filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 query = query.Where(r => r.ReportName.ToLower().Contains(search.ToLower()));
             }
 
-            // 2. Date Created Range Filter (Jan 16, 2026 - May 20, 2026)
-            if (startDateCreated.HasValue)
-            {
-                var startDateTime = startDateCreated.Value.ToDateTime(TimeOnly.MinValue);
-                query = query.Where(r => r.CreatedAt >= startDateTime);
-            }
+            // 2. Date Created Range Filter
+            if (startDateCreated.HasValue) query = query.Where(r => r.CreatedAt >= startDateCreated.Value.ToDateTime(TimeOnly.MinValue));
+            if (endDateCreated.HasValue) query = query.Where(r => r.CreatedAt <= endDateCreated.Value.ToDateTime(TimeOnly.MaxValue));
 
-            if (endDateCreated.HasValue)
-            {
-                var endDateTime = endDateCreated.Value.ToDateTime(TimeOnly.MaxValue);
-                query = query.Where(r => r.CreatedAt <= endDateTime);
-            }
+            // 3. Min/Max Revenue Filter
+            if (minRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) >= minRevenue.Value);
+            if (maxRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) <= maxRevenue.Value);
 
-            // 3. Expected Revenue Filter (Total Revenue = Sum of AmountToPay)
-            if (minRevenue.HasValue)
-            {
-                query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) >= minRevenue.Value);
-            }
-
-            if (maxRevenue.HasValue)
-            {
-                query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) <= maxRevenue.Value);
-            }
-
-            // 4. Last Updated Filter
-            if (!string.IsNullOrWhiteSpace(lastUpdated) && lastUpdated.ToLower() != "all")
+            // 4. Last Updated Filter (Direct Inline Code Gamit ang Short Codes)
+            if (!string.IsNullOrWhiteSpace(lastUpdated) && !lastUpdated.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
                 var nowUtc = DateTime.UtcNow;
 
-                query = lastUpdated.ToLower() switch
+                query = lastUpdated.ToUpper() switch
                 {
-                    "today" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value.Date == nowUtc.Date),
-                    "this_week" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value >= nowUtc.AddDays(-7)),
-                    "this_month" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value >= nowUtc.AddDays(-30)),
-                    "never" => query.Where(r => !r.LastDateUpdated.HasValue),
+                    "TOD" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value.Date == nowUtc.Date),
+                    "L7D" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value >= nowUtc.AddDays(-7)),
+                    "L30D" => query.Where(r => r.LastDateUpdated.HasValue && r.LastDateUpdated.Value >= nowUtc.AddDays(-30)),
+                    "TM" => query.Where(r => r.LastDateUpdated.HasValue &&
+                                              r.LastDateUpdated.Value.Year == nowUtc.Year &&
+                                              r.LastDateUpdated.Value.Month == nowUtc.Month),
                     _ => query
                 };
             }
 
             int totalRecords = await query.CountAsync();
 
-            // 5. Dynamic Sorting Logic batay sa UI Specs
+            // 5. Separate Column (sortBy) & Direction (sortOrder)
+            bool isDesc = string.Equals(sortOrder, "DESC", StringComparison.OrdinalIgnoreCase);
+
             query = sortBy?.ToLower() switch
             {
-                // Cash Revenue Sorting
-                "cash_desc" => query.OrderByDescending(r => r.Rows
-                    .Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod))
-                    .Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                "expectedCashRevenue" or "cash" => isDesc
+                    ? query.OrderByDescending(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0)
+                    : query.OrderBy(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0),
 
-                "cash_asc" => query.OrderBy(r => r.Rows
-                    .Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod))
-                    .Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                "expectedOnlineRevenue" or "online" => isDesc
+                    ? query.OrderByDescending(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0)
+                    : query.OrderBy(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0),
 
-                // Online Revenue Sorting
-                "online_desc" => query.OrderByDescending(r => r.Rows
-                    .Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod))
-                    .Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                "lastDateUpdated" or "lastupdated" => isDesc
+                    ? query.OrderByDescending(r => r.LastDateUpdated ?? r.CreatedAt)
+                    : query.OrderBy(r => r.LastDateUpdated ?? r.CreatedAt),
 
-                "online_asc" => query.OrderBy(r => r.Rows
-                    .Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod))
-                    .Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                "reportName" or "name" => isDesc
+                    ? query.OrderByDescending(r => r.ReportName)
+                    : query.OrderBy(r => r.ReportName),
 
-                // Date Created Sorting
-                "date_asc" => query.OrderBy(r => r.CreatedAt), // Date Created: Oldest first
-                "date_desc" => query.OrderByDescending(r => r.CreatedAt), // Date Created: Newest first
-
-                // Last Updated Sorting
-                "updated_desc" => query.OrderByDescending(r => r.LastDateUpdated ?? r.CreatedAt), // Last Updated: Newest first
-                "updated_asc" => query.OrderBy(r => r.LastDateUpdated ?? r.CreatedAt), // Last Updated: Oldest first
-
-                _ => query.OrderByDescending(r => r.CreatedAt) // Default fallback
+                _ => isDesc // Default Column: "createdAt"
+                    ? query.OrderByDescending(r => r.CreatedAt)
+                    : query.OrderBy(r => r.CreatedAt)
             };
 
             // 6. Projection & Pagination
@@ -157,15 +138,7 @@ namespace FitHolic.Controllers
 
             int totalPages = (int)Math.Ceiling((double)totalRecords / pageSize);
 
-            var response = new PagedReportResponse(
-                Data: reportList,
-                TotalRecords: totalRecords,
-                CurrentPage: page,
-                TotalPages: totalPages == 0 ? 1 : totalPages,
-                PageSize: pageSize
-            );
-
-            return Ok(response);
+            return Ok(new PagedReportResponse(reportList, totalRecords, page, totalPages == 0 ? 1 : totalPages, pageSize));
         }
 
         [HttpGet("{id:int}/details")]
