@@ -31,8 +31,15 @@ namespace FitHolic.Controllers
         [HttpGet("list")]
         [EnableRateLimiting("ConcurrencyPolicy")]
         [OutputCache(PolicyName = "ExpensesListCache")] // Caches paged & filtered responses
+        [ProducesResponseType(typeof(ExpensesPagedResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
         public async Task<IActionResult> GetPagedExpenses(
             [FromQuery] string? searchTerm = null,
+            [FromQuery] DateOnly? startDateCreated = null, // Date Created Start Range
+            [FromQuery] DateOnly? endDateCreated = null,   // Date Created End Range
+            [FromQuery] decimal? minExpenses = null,       // Expenses Revenue (min)
+            [FromQuery] decimal? maxExpenses = null,       // Expenses Revenue (max)
+            [FromQuery] string? lastUpdated = null,        // "all", "today", "this_week", "this_month", "never"
             [FromQuery] int pageNumber = 1,
             [FromQuery] int pageSize = 10,
             [FromQuery] string? sortBy = "date_desc")
@@ -42,23 +49,75 @@ namespace FitHolic.Controllers
 
             var query = _context.GymExpenses.AsNoTracking().AsQueryable();
 
+            // 1. Search Filter (by Report Name)
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
                 string lowerSearch = searchTerm.ToLower();
                 query = query.Where(e => e.ReportName.ToLower().Contains(lowerSearch));
             }
 
-            query = sortBy switch
+            // 2. Date Created Range Filter
+            if (startDateCreated.HasValue)
             {
-                "date_asc" => query.OrderBy(e => e.CreatedAt),
-                "amount_desc" => query.OrderByDescending(e => e.TotalExpenses),
-                "amount_asc" => query.OrderBy(e => e.TotalExpenses),
-                _ => query.OrderByDescending(e => e.CreatedAt)
-            };
+                var startDateTime = startDateCreated.Value.ToDateTime(TimeOnly.MinValue);
+                query = query.Where(e => e.CreatedAt >= startDateTime);
+            }
+
+            if (endDateCreated.HasValue)
+            {
+                var endDateTime = endDateCreated.Value.ToDateTime(TimeOnly.MaxValue);
+                query = query.Where(e => e.CreatedAt <= endDateTime);
+            }
+
+            // 3. Expenses Revenue Range Filter (TotalExpenses min-max)
+            if (minExpenses.HasValue)
+            {
+                query = query.Where(e => e.TotalExpenses >= minExpenses.Value);
+            }
+
+            if (maxExpenses.HasValue)
+            {
+                query = query.Where(e => e.TotalExpenses <= maxExpenses.Value);
+            }
+
+            // 4. Last Updated Filter
+            if (!string.IsNullOrWhiteSpace(lastUpdated) && lastUpdated.ToLower() != "all")
+            {
+                var nowUtc = DateTime.UtcNow;
+
+                query = lastUpdated.ToLower() switch
+                {
+                    "today" => query.Where(e => e.LastDateUpdated.HasValue && e.LastDateUpdated.Value.Date == nowUtc.Date),
+                    "this_week" => query.Where(e => e.LastDateUpdated.HasValue && e.LastDateUpdated.Value >= nowUtc.AddDays(-7)),
+                    "this_month" => query.Where(e => e.LastDateUpdated.HasValue && e.LastDateUpdated.Value >= nowUtc.AddDays(-30)),
+                    "never" => query.Where(e => !e.LastDateUpdated.HasValue),
+                    _ => query
+                };
+            }
 
             int totalCount = await query.CountAsync();
+
+            // 5. Dynamic Sorting Logic based on UI Specs
+            query = sortBy?.ToLower() switch
+            {
+                // Total Expenses Sorting
+                "expenses_desc" => query.OrderByDescending(e => e.TotalExpenses), // Total Expenses: Highest first
+                "expenses_asc" => query.OrderBy(e => e.TotalExpenses),           // Total Expenses: Lowest first
+
+                // Date Created Sorting
+                "date_asc" => query.OrderBy(e => e.CreatedAt),                     // Date Created: Oldest first
+                "date_desc" => query.OrderByDescending(e => e.CreatedAt),         // Date Created: Newest first
+
+                // Last Updated Sorting
+                "updated_desc" => query.OrderByDescending(e => e.LastDateUpdated ?? e.CreatedAt), // Last Updated: Newest first
+                "updated_asc" => query.OrderBy(e => e.LastDateUpdated ?? e.CreatedAt),          // Last Updated: Oldest first
+
+                _ => query.OrderByDescending(e => e.CreatedAt) // Default fallback
+            };
+
             int totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
 
+            // 6. Projection & Pagination
             var pagedData = await query
                 .Skip((pageNumber - 1) * pageSize)
                 .Take(pageSize)
@@ -68,7 +127,7 @@ namespace FitHolic.Controllers
                     e.ReportName,
                     e.TotalExpenses,
                     e.CreatedAt,
-                    null
+                    e.LastDateUpdated
                 ))
                 .ToListAsync();
 
