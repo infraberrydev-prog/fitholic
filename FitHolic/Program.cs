@@ -1,6 +1,7 @@
 using FitHolic;
 using FitHolic.Class;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,40 +9,41 @@ using Scalar.AspNetCore;
 using System.Text;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
+
+// 1. Configure Forwarded Headers (Standard for reverse proxies like Render, Nginx, Cloudflare)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.SetIsOriginAllowed(origin => true) // <--- This handles dynamic URLs
+        policy.SetIsOriginAllowed(origin => true) // Handles dynamic URLs
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
+
 builder.Services.AddControllers();
-//builder.Services.AddControllers()
-//    .AddJsonOptions(options =>
-//    {
-//        options.JsonSerializerOptions.Converters.Add(new FitHolic.Class.DateFormat.JsonDateConverter());
-//    });
 
+// 2. Output Cache Policies (Pinagsama sa iisang configuration)
 builder.Services.AddOutputCache(options =>
 {
-    // Pag-configure sa ReportsListCache policy kung gusto mo itong i-customize
-    options.AddPolicy("ReportsListCache", builder =>
-        builder.Expire(TimeSpan.FromMinutes(10))
-               .SetVaryByQuery("search", "page", "pageSize") // Siguraduhing magkaiba ang cache per search term/page!
-               .Tag("reports-cache-tag"));
-});
+    options.AddPolicy("ReportsListCache", policy =>
+        policy.Expire(TimeSpan.FromMinutes(10))
+              .SetVaryByQuery("search", "startDateCreated", "endDateCreated", "minRevenue", "maxRevenue", "lastUpdated", "page", "pageSize", "sortBy")
+              .Tag("reports-cache-tag"));
 
-builder.Services.AddOutputCache(options =>
-{
-    // Policy para sa Expenses Controller
     options.AddPolicy("ExpensesListCache", policy =>
         policy.Expire(TimeSpan.FromMinutes(5))
-              .SetVaryByQuery("searchTerm", "pageNumber", "pageSize", "sortBy")
+              .SetVaryByQuery("searchTerm", "startDateCreated", "endDateCreated", "minExpenses", "maxExpenses", "lastUpdated", "pageNumber", "pageSize", "sortBy")
               .Tag("expenses-data"));
 });
 
@@ -59,11 +61,11 @@ builder.Services.AddRateLimiter(options =>
         opt.Window = TimeSpan.FromMinutes(1);
     });
 });
+
 builder.Services.AddScoped<GenerateTokenJwt>();
 builder.Services.AddScoped<SendEmailOtp>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-
 builder.Services.AddDbContext<FitHolicDbContext>(options =>
     options.UseNpgsql(connectionString));
 
@@ -95,6 +97,9 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Enable Forwarded Headers Middleware FIRST before routing/CORS/Auth
+app.UseForwardedHeaders();
+
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<FitHolicDbContext>();
@@ -105,11 +110,11 @@ app.MapOpenApi();
 app.MapScalarApiReference();
 
 app.UseCors("AllowAll");
-
 app.UseRouting();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
 app.Run();
