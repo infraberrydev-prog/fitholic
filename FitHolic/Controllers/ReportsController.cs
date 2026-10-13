@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using System.IO.Compression;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace FitHolic.Controllers
 {
@@ -757,6 +758,11 @@ namespace FitHolic.Controllers
                                        ?? User.Identity?.Name
                                        ?? "System";
 
+                var jsonOptions = new JsonSerializerOptions
+                {
+                    ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+                };
+
                 var auditLog = new AuditLogs
                 {
                     EntityName = nameof(GymReportRow),
@@ -764,8 +770,8 @@ namespace FitHolic.Controllers
                     Action = "UPDATE",
                     ModifiedBy = currentUserId,
                     Timestamp = DateTime.UtcNow,
-                    OldValues = JsonSerializer.Serialize(oldValues),
-                    NewValues = JsonSerializer.Serialize(newValues),
+                    OldValues = JsonSerializer.Serialize(oldValues, jsonOptions),
+                    NewValues = JsonSerializer.Serialize(newValues, jsonOptions),
                     ChangedColumns = string.Join(", ", changedColumns)
                 };
 
@@ -884,6 +890,11 @@ namespace FitHolic.Controllers
                                    ?? User.Identity?.Name
                                    ?? "System";
 
+            var jsonOptions = new JsonSerializerOptions
+            {
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+            };
+
             var auditLog = new AuditLogs
             {
                 EntityName = nameof(GymReportRow),
@@ -892,7 +903,7 @@ namespace FitHolic.Controllers
                 ModifiedBy = currentUserId,
                 Timestamp = DateTime.UtcNow,
                 OldValues = null,
-                NewValues = JsonSerializer.Serialize(newRow),
+                NewValues = JsonSerializer.Serialize(newRow, jsonOptions),
                 ChangedColumns = "ALL"
             };
 

@@ -1,4 +1,6 @@
 ﻿using ClosedXML.Excel;
+using DocumentFormat.OpenXml.Spreadsheet;
+using DocumentFormat.OpenXml.Vml.Office;
 using FitHolic.DTO;
 using FitHolic.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -7,6 +9,8 @@ using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.IO.Compression;
+using System.Security.Claims;
+using System.Text.Json;
 
 namespace FitHolic.Controllers
 {
@@ -222,6 +226,30 @@ namespace FitHolic.Controllers
                 return NotFound(new ErrorResponse(404, "NOT_FOUND", $"Expenses report with ID {id} not found."));
             }
 
+            var oldValues = new Dictionary<string, object?>();
+            var newValues = new Dictionary<string, object?>();
+            var changedColumns = new List<string>();
+
+            // Helper method para suriin at i-record ang pagbabago bawat field
+            void TrackChange<T>(string propertyName, T oldValue, T newValue)
+            {
+                if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
+                {
+                    oldValues[propertyName] = oldValue;
+                    newValues[propertyName] = newValue;
+                    changedColumns.Add(propertyName);
+                }
+            }
+
+            // 1. I-compare ang mga lumang values laban sa bagong request values
+            TrackChange(nameof(request.ReportName), request.ReportName, request.ReportName);
+            TrackChange(nameof(request.CashPayment), request.CashPayment, request.CashPayment);
+            TrackChange(nameof(request.OnlinePayment), request.OnlinePayment, request.OnlinePayment);
+            TrackChange(nameof(request.Expenses), request.Expenses, request.Expenses);
+            TrackChange(nameof(request.Payroll), request.Payroll, request.Payroll);
+            TrackChange(nameof(request.Electricity), request.Electricity, request.Electricity);
+            TrackChange(nameof(request.TotalExpenses), request.TotalExpenses, request.TotalExpenses);
+
             existingReport.ReportName = request.ReportName;
             existingReport.CashPayment = request.CashPayment;
             existingReport.OnlinePayment = request.OnlinePayment ?? 0;
@@ -231,6 +259,30 @@ namespace FitHolic.Controllers
             existingReport.TotalExpenses = request.TotalExpenses;
             existingReport.LastDateUpdated = DateTime.Now;
 
+            await _context.SaveChangesAsync();
+
+            string currentUserId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                   ?? User.Identity?.Name
+                                   ?? "System";
+
+            var jsonOptions = new JsonSerializerOptions
+            {
+                ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+            };
+
+            var auditLog = new AuditLogs
+            {
+                EntityName = nameof(GymReportRow),
+                EntityId = id,
+                Action = "UPDATE",
+                ModifiedBy = currentUserId,
+                Timestamp = DateTime.UtcNow,
+                OldValues = JsonSerializer.Serialize(oldValues, jsonOptions),
+                NewValues = JsonSerializer.Serialize(newValues, jsonOptions),
+                ChangedColumns = string.Join(", ", changedColumns)
+            };
+
+            _context.AuditLogs.Add(auditLog);
             await _context.SaveChangesAsync();
 
             // Evict/clear cached lists so updated data reflects across lists/queries
