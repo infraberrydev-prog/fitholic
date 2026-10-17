@@ -2,6 +2,7 @@
 using FitHolic.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace FitHolic.Controllers
 {
@@ -11,11 +12,13 @@ namespace FitHolic.Controllers
     {
         private readonly FitHolicDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<UserController> _logger;
 
-        public UserController(FitHolicDbContext context, IConfiguration configuration)
+        public UserController(FitHolicDbContext context, IConfiguration configuration, ILogger<UserController> logger)
         {
             _context = context;
             _configuration = configuration;
+            _logger = logger;
         }
         [HttpPost("create-user")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)

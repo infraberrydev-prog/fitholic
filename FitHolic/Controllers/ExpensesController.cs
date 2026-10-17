@@ -21,11 +21,13 @@ namespace FitHolic.Controllers
     {
         private readonly FitHolicDbContext _context;
         private readonly IOutputCacheStore _cacheStore;
+        private readonly ILogger<ExpensesController> _logger;
 
-        public ExpensesController(FitHolicDbContext context, IOutputCacheStore cacheStore)
+        public ExpensesController(FitHolicDbContext context, IOutputCacheStore cacheStore, ILogger<ExpensesController> logger)
         {
             _context = context;
             _cacheStore = cacheStore;
+            _logger = logger;
         }
 
         // ==========================================
@@ -176,15 +178,22 @@ namespace FitHolic.Controllers
                 ));
             }
 
+            // Compute Total Gross Revenue and Net (TotalExpenses) server-side
+            decimal onlinePayment = request.OnlinePayment ?? 0m;
+            decimal totalGrossRevenue = request.CashPayment + onlinePayment;
+            decimal totalDeductions = request.Expenses + request.Payroll + request.Electricity;
+            decimal netRevenue = totalGrossRevenue - totalDeductions;
+
             var expenseReport = new GymExpensesReport
             {
                 ReportName = request.ReportName,
                 CashPayment = request.CashPayment,
-                OnlinePayment = request.OnlinePayment ?? 0,
+                OnlinePayment = onlinePayment,
                 Expenses = request.Expenses,
                 Payroll = request.Payroll,
                 Electricity = request.Electricity,
-                TotalExpenses = request.TotalExpenses
+                // TotalExpenses now represents Net Revenue (Gross - Deductions)
+                TotalExpenses = netRevenue
             };
 
             _context.GymExpenses.Add(expenseReport);
@@ -241,22 +250,36 @@ namespace FitHolic.Controllers
                 }
             }
 
-            // 1. I-compare ang mga lumang values laban sa bagong request values
-            TrackChange(nameof(request.ReportName), request.ReportName, request.ReportName);
-            TrackChange(nameof(request.CashPayment), request.CashPayment, request.CashPayment);
-            TrackChange(nameof(request.OnlinePayment), request.OnlinePayment, request.OnlinePayment);
-            TrackChange(nameof(request.Expenses), request.Expenses, request.Expenses);
-            TrackChange(nameof(request.Payroll), request.Payroll, request.Payroll);
-            TrackChange(nameof(request.Electricity), request.Electricity, request.Electricity);
-            TrackChange(nameof(request.TotalExpenses), request.TotalExpenses, request.TotalExpenses);
+            // 1. I-compare ang mga lumang values laban sa bagong request values (compare existing -> incoming)
+            TrackChange(nameof(existingReport.ReportName), existingReport.ReportName, request.ReportName);
+            TrackChange(nameof(existingReport.CashPayment), existingReport.CashPayment, request.CashPayment);
+            TrackChange(nameof(existingReport.OnlinePayment), existingReport.OnlinePayment, request.OnlinePayment ?? 0m);
+            TrackChange(nameof(existingReport.Expenses), existingReport.Expenses, request.Expenses);
+            TrackChange(nameof(existingReport.Payroll), existingReport.Payroll, request.Payroll);
+            TrackChange(nameof(existingReport.Electricity), existingReport.Electricity, request.Electricity);
 
+            // Compute old and new net revenue (TotalExpenses) so we can track change
+            decimal oldOnline = existingReport.OnlinePayment ?? 0m;
+            decimal oldGross = existingReport.CashPayment + oldOnline;
+            decimal oldDeductions = existingReport.Expenses + existingReport.Payroll + existingReport.Electricity;
+            decimal oldNet = oldGross - oldDeductions;
+
+            decimal newOnline = request.OnlinePayment ?? 0m;
+            decimal newGross = request.CashPayment + newOnline;
+            decimal newDeductions = request.Expenses + request.Payroll + request.Electricity;
+            decimal newNet = newGross - newDeductions;
+
+            TrackChange(nameof(existingReport.TotalExpenses), oldNet, newNet);
+
+            // Apply updates
             existingReport.ReportName = request.ReportName;
             existingReport.CashPayment = request.CashPayment;
-            existingReport.OnlinePayment = request.OnlinePayment ?? 0;
+            existingReport.OnlinePayment = newOnline;
             existingReport.Expenses = request.Expenses;
             existingReport.Payroll = request.Payroll;
             existingReport.Electricity = request.Electricity;
-            existingReport.TotalExpenses = request.TotalExpenses;
+            // Store computed net revenue
+            existingReport.TotalExpenses = newNet;
             existingReport.LastDateUpdated = DateTime.Now;
 
             await _context.SaveChangesAsync();
@@ -272,7 +295,7 @@ namespace FitHolic.Controllers
 
             var auditLog = new AuditLogs
             {
-                EntityName = nameof(GymReportRow),
+                EntityName = nameof(GymExpensesReport),
                 EntityId = id,
                 Action = "UPDATE",
                 ModifiedBy = currentUserId,
@@ -389,8 +412,8 @@ namespace FitHolic.Controllers
 			"Expenses",
 			"Payroll",
 			"Electricity",
-			"Grand Total"
-				};
+            "Total Gross Revenue"
+                };
 
 				int headerRowIndex = 4;
 				for (int col = 0; col < headers.Length; col++)

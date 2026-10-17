@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System.Reflection;
 
 namespace FitHolic.Controllers
@@ -8,10 +9,12 @@ namespace FitHolic.Controllers
     public class HealthController : ControllerBase
     {
         private readonly FitHolicDbContext _context; // Palitan ng totoong DbContext class name mo
+        private readonly ILogger<HealthController> _logger;
 
-        public HealthController(FitHolicDbContext context)
+        public HealthController(FitHolicDbContext context, ILogger<HealthController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
         [HttpGet]

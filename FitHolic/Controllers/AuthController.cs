@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
 
 namespace FitHolic.Controllers
 {
@@ -20,19 +21,22 @@ namespace FitHolic.Controllers
         private readonly GenerateTokenJwt _generateToken;
         private readonly SendEmailOtp _sendOTP;
         private readonly IOutputCacheStore _cacheStore;
+        private readonly ILogger<AuthController> _logger;
 
         public AuthController(
             FitHolicDbContext context,
             IConfiguration configuration,
             GenerateTokenJwt generateToken,
             SendEmailOtp sendOTP,
-            IOutputCacheStore cacheStore)
+            IOutputCacheStore cacheStore,
+            ILogger<AuthController> logger)
         {
             _context = context;
             _configuration = configuration;
             _generateToken = generateToken;
             _sendOTP = sendOTP;
             _cacheStore = cacheStore;
+            _logger = logger;
         }
 
         [HttpPost("login")]

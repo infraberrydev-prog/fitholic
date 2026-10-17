@@ -21,14 +21,16 @@ namespace FitHolic.Controllers
     {
         private readonly FitHolicDbContext _context;
         private readonly IOutputCacheStore _cacheStore;
+        private readonly ILogger<ReportsController> _logger;
 
         // Visual tag identifier for clearing cache
         private const string ReportsCacheTag = "reports-cache-tag";
 
-        public ReportsController(FitHolicDbContext context, IOutputCacheStore cacheStore)
+        public ReportsController(FitHolicDbContext context, IOutputCacheStore cacheStore, ILogger<ReportsController> logger)
         {
             _context = context;
             _cacheStore = cacheStore;
+            _logger = logger;
         }
 
         // Helper Method para hindi paulit-ulit ang pag-evict
@@ -73,9 +75,9 @@ namespace FitHolic.Controllers
             if (startDateCreated.HasValue) query = query.Where(r => r.CreatedAt >= startDateCreated.Value.ToDateTime(TimeOnly.MinValue));
             if (endDateCreated.HasValue) query = query.Where(r => r.CreatedAt <= endDateCreated.Value.ToDateTime(TimeOnly.MaxValue));
 
-            // 3. Min/Max Revenue Filter
-            if (minRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) >= minRevenue.Value);
-            if (maxRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)row.AmountToPay) <= maxRevenue.Value);
+            // 3. Min/Max Revenue Filter (use computed per-row total)
+            if (minRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) >= minRevenue.Value);
+            if (maxRevenue.HasValue) query = query.Where(r => r.Rows.Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) <= maxRevenue.Value);
 
             // 4. Last Updated Filter (Direct Inline Code Gamit ang Short Codes)
             if (!string.IsNullOrWhiteSpace(lastUpdated) && !lastUpdated.Equals("ALL", StringComparison.OrdinalIgnoreCase))
@@ -102,12 +104,12 @@ namespace FitHolic.Controllers
             query = sortBy?.ToLower() switch
             {
                 "expectedCashRevenue" or "cash" => isDesc
-                    ? query.OrderByDescending(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0)
-                    : query.OrderBy(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                    ? query.OrderByDescending(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0)
+                    : query.OrderBy(r => r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0),
 
                 "expectedOnlineRevenue" or "online" => isDesc
-                    ? query.OrderByDescending(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0)
-                    : query.OrderBy(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0),
+                    ? query.OrderByDescending(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0)
+                    : query.OrderBy(r => r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0),
 
                 "lastDateUpdated" or "lastupdated" => isDesc
                     ? query.OrderByDescending(r => r.LastDateUpdated ?? r.CreatedAt)
@@ -130,8 +132,8 @@ namespace FitHolic.Controllers
                     r.Id,
                     $"MR{r.Id:D5}",
                     r.ReportName,
-                    r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0,
-                    r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)row.AmountToPay) ?? 0,
+                    r.Rows.Where(row => string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0,
+                    r.Rows.Where(row => !string.IsNullOrWhiteSpace(row.OnlinePaymentMethod)).Sum(row => (decimal?)(row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay)) ?? 0,
                     r.CreatedAt,
                     r.LastDateUpdated
                 ))
@@ -197,11 +199,14 @@ namespace FitHolic.Controllers
                     ReferenceNumber: row.ReferenceNumber
                 )).ToList();
 
+            // Compute total from rows to ensure accurate value (MembershipFee + DailyPass + MonthlyPayment + AmountToPay)
+            decimal computedTotal = report.Rows.Sum(row => row.MembershipFee + (row.DailyPass ?? 0m) + row.MonthlyPayment + row.AmountToPay);
+
             var response = new ReportDetailsResponse(
                 ReportId: $"MR{report.Id:D5}",
                 ReportName: report.ReportName,
                 PaymentType: report.PaymentType,
-                TotalAmount: report.TotalAmount,
+                TotalAmount: computedTotal,
                 DateCreated: report.CreatedAt,
                 CashRows: cashRows,
                 OnlineRows: onlineRows
@@ -345,6 +350,28 @@ namespace FitHolic.Controllers
                             mappedPackageDisplay = row.PersonalTrainerPackage;
                         }
                     }
+
+                    // Safely extract the price string
+                    string priceStr = "0";
+                    if (!string.IsNullOrWhiteSpace(mappedPackageDisplay) && mappedPackageDisplay.Contains("Php"))
+                    {
+                        var parts = mappedPackageDisplay.Split(new[] { "Php" }, StringSplitOptions.None);
+                        if (parts.Length > 1)
+                        {
+                            priceStr = parts[1].Trim();
+                        }
+                    }
+
+                    // Parse safely to decimal (or int if you prefer)
+                    decimal packagePrice = decimal.TryParse(priceStr.Replace(",", ""), out decimal parsedPrice) ? parsedPrice : 0m;
+
+                    // Calculate total safely
+                    decimal totalAmount = 0m;
+                    if (row.DailyPass == 0 || row.DailyPass == null)
+                        totalAmount = (decimal)row.MembershipFee + row.MonthlyPayment + packagePrice + row.AmountToPay;
+                    else
+                        totalAmount = row.DailyPass.Value;
+
                     worksheet.Cell(currentRow, 9).Value = mappedPackageDisplay;
 
                     worksheet.Cell(currentRow, 10).Value = string.IsNullOrWhiteSpace(row.PaymentOption) ? "—" : row.PaymentOption;
@@ -355,7 +382,7 @@ namespace FitHolic.Controllers
                     worksheet.Cell(currentRow, 12).Value = string.IsNullOrWhiteSpace(row.OnlinePaymentMethod) ? "Cash" : row.OnlinePaymentMethod;
                     worksheet.Cell(currentRow, 13).Value = string.IsNullOrWhiteSpace(row.ReferenceNumber) ? "—" : row.ReferenceNumber;
 
-                    worksheet.Cell(currentRow, 14).Value = report.TotalAmount;
+                    worksheet.Cell(currentRow, 14).Value = totalAmount;
                     worksheet.Cell(currentRow, 14).Style.NumberFormat.Format = "₱#,##0.00";
 
                     // Row Borders
@@ -452,8 +479,10 @@ namespace FitHolic.Controllers
         // Private Helper Method para malinis at hindi paulit-ulit ang pag-map ng entity
         private static GymReportRow MapToGymReportRow(ReportRowDto row, bool isOnline)
         {
-            DateOnly? finalEnrollmentDate = row.IsCustomerMember ? null : row.DateOfEnrollment;
-            decimal finalMembershipFee = row.IsCustomerMember ? 0 : row.MembershipFee;
+            // Preserve date of enrollment and membership fee for members.
+            // For non-members (walk-ins) these values should be null/zero.
+            DateOnly? finalEnrollmentDate = row.IsCustomerMember ? row.DateOfEnrollment : null;
+            decimal finalMembershipFee = row.IsCustomerMember ? row.MembershipFee : 0m;
 
             return new GymReportRow
             {
@@ -461,7 +490,7 @@ namespace FitHolic.Controllers
                 IsCustomerMember = row.IsCustomerMember,
                 DateOfEnrollment = finalEnrollmentDate,
                 MembershipFee = finalMembershipFee,
-                DailyPass = null,
+                DailyPass = row.DailyPass,
                 ContractDuration = string.IsNullOrWhiteSpace(row.ContractDuration) ? "—" : row.ContractDuration,
                 MonthlyPayment = row.MonthlyPayment,
                 IncludePersonalTrainer = row.IncludePersonalTrainer,
