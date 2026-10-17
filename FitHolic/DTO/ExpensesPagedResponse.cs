@@ -12,7 +12,7 @@
         int Id,
         string FormattedReportId,
         string ReportName,
-        decimal TotalExpenses,
+        decimal TotalGrossRevenue,
         DateTime DateCreated,
         DateTime? LastUpdated
     );
