@@ -12,7 +12,7 @@ namespace FitHolic.Models
         public int EntityId { get; set; }
         public string Action { get; set; } = string.Empty;
         public string ModifiedBy { get; set; } = "System";
-        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+        public DateTime Timestamp { get; set; } = DateTime.Now;
 
         [Column(TypeName = "jsonb")]
         public string? OldValues { get; set; }

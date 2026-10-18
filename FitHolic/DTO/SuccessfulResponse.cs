@@ -2,6 +2,6 @@
 {
     public class SuccessfulResponse
     {
-        public string message { get; set; }
+        public string message { get; set; } = string.Empty;
     }
 }

@@ -74,7 +74,7 @@ namespace FitHolic.Controllers
             // 4. Last Updated Filter (Direct Inline Code Gamit ang Short Codes)
             if (!string.IsNullOrWhiteSpace(lastUpdated) && !lastUpdated.Equals("ALL", StringComparison.OrdinalIgnoreCase))
             {
-                var nowUtc = DateTime.UtcNow;
+                var nowUtc = DateTime.Now;
 
                 query = lastUpdated.ToUpper() switch
                 {
@@ -299,7 +299,7 @@ namespace FitHolic.Controllers
                 EntityId = id,
                 Action = "UPDATE",
                 ModifiedBy = currentUserId,
-                Timestamp = DateTime.UtcNow,
+                Timestamp = DateTime.Now,
                 OldValues = JsonSerializer.Serialize(oldValues, jsonOptions),
                 NewValues = JsonSerializer.Serialize(newValues, jsonOptions),
                 ChangedColumns = string.Join(", ", changedColumns)

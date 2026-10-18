@@ -74,7 +74,7 @@ namespace FitHolic.Controllers
                 {
                     UserId = user.Id,
                     OtpCode = generatedOtp,
-                    ExpiryTime = DateTime.UtcNow.AddMinutes(5),
+                    ExpiryTime = DateTime.Now.AddMinutes(5),
                     IsUsed = false
                 };
 
@@ -124,7 +124,7 @@ namespace FitHolic.Controllers
             }
 
             user.RefreshToken = string.Empty;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(-1);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(-1);
 
             await _context.SaveChangesAsync();
 
@@ -179,7 +179,7 @@ namespace FitHolic.Controllers
             var refreshToken = GenerateToken.GenerateRefreshToken();
 
             user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
 
             await _context.SaveChangesAsync();
 
@@ -230,7 +230,7 @@ namespace FitHolic.Controllers
             {
                 UserId = user.Id,
                 OtpCode = generatedOtp,
-                ExpiryTime = DateTime.UtcNow.AddMinutes(5),
+                ExpiryTime = DateTime.Now.AddMinutes(5),
                 IsUsed = false
             };
 
@@ -266,7 +266,7 @@ namespace FitHolic.Controllers
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.RefreshToken == tokenDto.RefreshToken);
 
-            if (user == null || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            if (user == null || user.RefreshTokenExpiryTime <= DateTime.Now)
             {
                 return Unauthorized(new ErrorResponse(401, "SESSION_EXPIRED", "Session expired. Please log in again."));
             }
@@ -275,7 +275,7 @@ namespace FitHolic.Controllers
             var newRefreshToken = GenerateToken.GenerateRefreshToken();
 
             user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7);
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(7);
 
             await _context.SaveChangesAsync();
 

@@ -35,7 +35,7 @@ namespace FitHolic.Controllers
 
             // Kunin ang API Version mula sa Assembly
             var apiVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
-            var utcNow = DateTime.UtcNow;
+            var utcNow = DateTime.Now;
 
             // 2. I-convert sa Philippine Time Zone (UTC+8)
             TimeZoneInfo phTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Singapore Standard Time");

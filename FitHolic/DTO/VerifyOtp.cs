@@ -46,7 +46,7 @@ namespace FitHolic.DTO
         private async Task<bool> isOtpExpired(string enteredOtp, CancellationToken cancellationToken)
         {
             var isExpired = await _context.UserOtps
-                .AnyAsync(u => u.ExpiryTime < DateTime.UtcNow, cancellationToken);
+                .AnyAsync(u => u.ExpiryTime < DateTime.Now, cancellationToken);
 
             return isExpired;
         }
